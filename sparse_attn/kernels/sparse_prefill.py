@@ -241,10 +241,9 @@ if _TRITON_AVAILABLE:
             + offs_d[None, :] * stride_vd
         )
         
-        # Sequence length S is a multiple of BLOCK_SIZE, so kv_start + offs_m < S is guaranteed.
-        # We only need to mask the feature dimension D.
-        # Broadcasting explicitly to [BLOCK_SIZE, BLOCK_D]
-        kv_mask = (tl.arange(0, BLOCK_SIZE)[:, None] < BLOCK_SIZE) & (offs_d[None, :] < D)
+        # Sequence length S is a multiple of BLOCK_SIZE.
+        # Assuming D == BLOCK_D (e.g. 128), we do not need masks for K and V.
+        # Unmasked loads are significantly faster.
 
         # ------------------------------------------------------------------ #
         #  Inner loop: iterate active KV blocks                              #
@@ -254,21 +253,20 @@ if _TRITON_AVAILABLE:
             is_causal  = tl.load(causal_flags_ptr + kv_ptr_idx)  # 0 or 1
             kv_start   = kv_block * BLOCK_SIZE
 
-            # Load K tile
-            k = tl.load(k_ptrs_base + kv_start * stride_ks, mask=kv_mask, other=0.0)  # [BLOCK_SIZE, BLOCK_D]
-
-            # Load V tile
-            v = tl.load(v_ptrs_base + kv_start * stride_vs, mask=kv_mask, other=0.0)  # [BLOCK_SIZE, BLOCK_D]
+            # Load K and V tiles (UNMASKED for speed)
+            k = tl.load(k_ptrs_base + kv_start * stride_ks, other=0.0)  # [BLOCK_SIZE, BLOCK_D]
+            v = tl.load(v_ptrs_base + kv_start * stride_vs, other=0.0)  # [BLOCK_SIZE, BLOCK_D]
 
             # Attention scores: [BLOCK_SIZE, BLOCK_SIZE]
             # q: [BLOCK_SIZE, BLOCK_D], k: [BLOCK_SIZE, BLOCK_D] -> trans(k): [BLOCK_D, BLOCK_SIZE]
             s = tl.dot(q, tl.trans(k)) * softmax_scale
 
-            # Causal masking (diagonal blocks: token-level)
-            if is_causal:
-                row_ids = (q_block_start + offs_m)[:, None]
-                col_ids = (kv_start + offs_m)[None, :]
-                s = tl.where(col_ids <= row_ids, s, float('-inf'))
+            # Branchless Causal Masking (avoid GPU control flow divergence)
+            row_ids = (q_block_start + offs_m)[:, None]
+            col_ids = (kv_start + offs_m)[None, :]
+            # If is_causal == 1, enforce col_ids <= row_ids. If 0, allow all (True).
+            mask_cond = (is_causal == 0) | (col_ids <= row_ids)
+            s = tl.where(mask_cond, s, float('-inf'))
 
             # Online softmax update
             row_max = tl.max(s, axis=1)              # [BLOCK_SIZE]
