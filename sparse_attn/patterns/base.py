@@ -114,6 +114,7 @@ class SparseBlockPattern:
     def to_kernel_format(self) -> Dict[str, torch.Tensor]:
         """
         Convert block_mask to CSR-like format for kernel consumption.
+        Caches the result to avoid Python overhead on repeated calls.
 
         Returns
         -------
@@ -125,6 +126,9 @@ class SparseBlockPattern:
         causal_mask : BoolTensor [num_active_blocks]
             True if this active block is on the main diagonal (row == col).
         """
+        if hasattr(self, "_cached_kf") and self._cached_kf is not None:
+            return self._cached_kf
+
         nb = self.num_blocks
         col_indices_list: List[int] = []
         row_ptrs_list: List[int] = [0]
@@ -141,13 +145,14 @@ class SparseBlockPattern:
         row_ptrs    = torch.tensor(row_ptrs_list,    dtype=torch.long)
         causal_mask = torch.tensor(causal_list,      dtype=torch.bool)
 
-        return {
+        self._cached_kf = {
             "col_indices": col_indices,
             "row_ptrs":    row_ptrs,
             "causal_mask": causal_mask,
             "num_blocks":  nb,
             "block_size":  self.block_size,
         }
+        return self._cached_kf
 
     # ------------------------------------------------------------------ #
     #  Utility                                                             #

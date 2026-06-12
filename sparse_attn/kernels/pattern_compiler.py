@@ -43,15 +43,22 @@ def compile_pattern(
     if device is None:
         device = pattern.block_mask.device
 
+    # Cache device-specific tensors to avoid host-to-device transfer in hot loops
+    cache_key = f"_cached_compiled_{device}"
+    if hasattr(pattern, cache_key) and getattr(pattern, cache_key) is not None:
+        return getattr(pattern, cache_key)
+
     kf = pattern.to_kernel_format()
-    return {
-        "col_indices": kf["col_indices"].to(device),
-        "row_ptrs":    kf["row_ptrs"].to(device),
-        "causal_mask": kf["causal_mask"].to(device),
+    result = {
+        "col_indices": kf["col_indices"].to(device, dtype=torch.int32),
+        "row_ptrs":    kf["row_ptrs"].to(device, dtype=torch.int32),
+        "causal_mask": kf["causal_mask"].to(device, dtype=torch.int8),
         "num_blocks":  kf["num_blocks"],
         "block_size":  kf["block_size"],
         "sparsity":    pattern.sparsity,
     }
+    setattr(pattern, cache_key, result)
+    return result
 
 
 def build_chunk_active_mask(

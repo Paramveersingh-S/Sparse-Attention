@@ -306,9 +306,9 @@ def _sparse_prefill_triton(
 
     # Compile pattern to CSR format on GPU
     kf = compile_pattern(pattern, device=q.device)
-    col_indices  = kf["col_indices"].to(torch.int32)
-    row_ptrs     = kf["row_ptrs"].to(torch.int32)
-    causal_flags = kf["causal_mask"].to(torch.int8)
+    col_indices  = kf["col_indices"]
+    row_ptrs     = kf["row_ptrs"]
+    causal_flags = kf["causal_mask"]
 
     # Output tensor
     out = torch.zeros_like(q)
@@ -379,6 +379,10 @@ def sparse_prefill(
         and q.is_cuda
         and not force_reference
     )
+
+    if q.is_cuda and not _TRITON_AVAILABLE and not force_reference:
+        import warnings
+        warnings.warn("Triton is not available! Falling back to extremely slow pure-PyTorch sparse prefill. Run 'pip install triton' to fix this.")
 
     if use_triton:
         # Ensure float16 for Triton
