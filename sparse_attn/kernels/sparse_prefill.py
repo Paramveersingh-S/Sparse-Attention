@@ -254,8 +254,8 @@ if _TRITON_AVAILABLE:
             kv_start   = kv_block * BLOCK_SIZE
 
             # Load K and V tiles (UNMASKED for speed)
-            k = tl.load(k_ptrs_base + kv_start * stride_ks, other=0.0)  # [BLOCK_SIZE, BLOCK_D]
-            v = tl.load(v_ptrs_base + kv_start * stride_vs, other=0.0)  # [BLOCK_SIZE, BLOCK_D]
+            k = tl.load(k_ptrs_base + kv_start * stride_ks)  # [BLOCK_SIZE, BLOCK_D]
+            v = tl.load(v_ptrs_base + kv_start * stride_vs)  # [BLOCK_SIZE, BLOCK_D]
 
             # Attention scores: [BLOCK_SIZE, BLOCK_SIZE]
             # q: [BLOCK_SIZE, BLOCK_D], k: [BLOCK_SIZE, BLOCK_D] -> trans(k): [BLOCK_D, BLOCK_SIZE]
