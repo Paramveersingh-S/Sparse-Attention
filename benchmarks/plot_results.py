@@ -39,7 +39,8 @@ def main():
 
     # Plotting
     plt.figure(figsize=(10, 6))
-    sns.barplot(x=[f"{s:,}\n({n})" for s, n in zip(seq_lens, valid_names)], y=speedups, palette="viridis")
+    x_labels = [f"{s:,}\n({n})" for s, n in zip(seq_lens, valid_names)]
+    sns.barplot(x=x_labels, y=speedups, hue=x_labels, palette="viridis", legend=False)
     plt.axhline(1.0, color='red', linestyle='--', label="Dense Baseline (1.0x)")
 
     plt.title(f"Sparse Attention Speedup vs Dense SDPA ({device.upper()})", fontsize=14, pad=15)

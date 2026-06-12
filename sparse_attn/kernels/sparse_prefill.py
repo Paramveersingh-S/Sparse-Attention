@@ -223,6 +223,30 @@ if _TRITON_AVAILABLE:
         row_end   = tl.load(row_ptrs_ptr + query_block + 1)
 
         # ------------------------------------------------------------------ #
+        #  Precompute KV Pointers and Masks                                  #
+        # ------------------------------------------------------------------ #
+        # Base pointers for K and V
+        k_ptrs_base = (
+            k_ptr
+            + batch_idx * stride_kb
+            + head_idx * stride_kh
+            + offs_m[:, None] * stride_ks
+            + offs_d[None, :] * stride_kd
+        )
+        v_ptrs_base = (
+            v_ptr
+            + batch_idx * stride_vb
+            + head_idx * stride_vh
+            + offs_m[:, None] * stride_vs
+            + offs_d[None, :] * stride_vd
+        )
+        
+        # Sequence length S is a multiple of BLOCK_SIZE, so kv_start + offs_m < S is guaranteed.
+        # We only need to mask the feature dimension D.
+        # Broadcasting explicitly to [BLOCK_SIZE, BLOCK_D]
+        kv_mask = (tl.arange(0, BLOCK_SIZE)[:, None] < BLOCK_SIZE) & (offs_d[None, :] < D)
+
+        # ------------------------------------------------------------------ #
         #  Inner loop: iterate active KV blocks                              #
         # ------------------------------------------------------------------ #
         for kv_ptr_idx in range(row_start, row_end):
@@ -231,24 +255,10 @@ if _TRITON_AVAILABLE:
             kv_start   = kv_block * BLOCK_SIZE
 
             # Load K tile
-            k_base = (
-                batch_idx * stride_kb
-                + head_idx * stride_kh
-                + (kv_start + offs_m[:, None]) * stride_ks
-                + offs_d[None, :] * stride_kd
-            )
-            k_mask = (kv_start + offs_m[:, None] < S) & (offs_d[None, :] < D)
-            k = tl.load(k_ptr + k_base, mask=k_mask, other=0.0)  # [BLOCK_SIZE, BLOCK_D]
+            k = tl.load(k_ptrs_base + kv_start * stride_ks, mask=kv_mask, other=0.0)  # [BLOCK_SIZE, BLOCK_D]
 
             # Load V tile
-            v_base = (
-                batch_idx * stride_vb
-                + head_idx * stride_vh
-                + (kv_start + offs_m[:, None]) * stride_vs
-                + offs_d[None, :] * stride_vd
-            )
-            v_mask = (kv_start + offs_m[:, None] < S) & (offs_d[None, :] < D)
-            v = tl.load(v_ptr + v_base, mask=v_mask, other=0.0)  # [BLOCK_SIZE, BLOCK_D]
+            v = tl.load(v_ptrs_base + kv_start * stride_vs, mask=kv_mask, other=0.0)  # [BLOCK_SIZE, BLOCK_D]
 
             # Attention scores: [BLOCK_SIZE, BLOCK_SIZE]
             # q: [BLOCK_SIZE, BLOCK_D], k: [BLOCK_SIZE, BLOCK_D] -> trans(k): [BLOCK_D, BLOCK_SIZE]
