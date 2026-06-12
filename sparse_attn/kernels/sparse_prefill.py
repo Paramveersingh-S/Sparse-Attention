@@ -329,6 +329,10 @@ def _sparse_prefill_triton(
     # Constexpr must be power-of-2; find next power of 2 for D
     BLOCK_D = 2 ** math.ceil(math.log2(D))
 
+    is_t4 = torch.cuda.get_device_capability(q.device)[0] < 8
+    num_stages = 2 if is_t4 else 3
+    num_warps = 2 if bs == 32 else 4
+
     _sparse_prefill_kernel[grid](
         q, k, v, out,
         col_indices, row_ptrs, causal_flags,
@@ -340,8 +344,8 @@ def _sparse_prefill_triton(
         softmax_scale,
         BLOCK_SIZE=bs,
         BLOCK_D=BLOCK_D,
-        num_warps=4,
-        num_stages=3,
+        num_warps=num_warps,
+        num_stages=num_stages,
     )
     return out
 

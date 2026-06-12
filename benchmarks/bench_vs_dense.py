@@ -108,11 +108,24 @@ def bench_config(name, B, H, S, D, local_window, stride, global_blocks, device, 
     print(f"Config: {name}  | B={B} H={H} S={S:,} D={D} | device={device}")
     print(f"{'='*70}")
 
+    # Determine block size based on GPU capability to prevent SMEM spilling on T4 (Compute 7.5)
+    # T4 has 64KB SMEM/SM. bs=64 requires ~80KB -> spills to global memory (10x slowdown).
+    # A100 (Compute 8.0) has 164KB SMEM/SM, so bs=64 is fine.
+    is_t4 = torch.cuda.is_available() and torch.cuda.get_device_capability(device)[0] < 8
+    bs = 32 if is_t4 else 64
+    
+    # Scale block parameters to maintain the exact same token coverage
+    scale_factor = 64 // bs
+    adj_lw = local_window * scale_factor
+    adj_st = stride * scale_factor
+    adj_gb = global_blocks * scale_factor
+
     pattern = make_local_stride_pattern(
-        seq_len=S, block_size=64,
-        local_window_blocks=local_window,
-        stride_blocks=stride,
-        global_blocks=global_blocks,
+        seq_len=S,
+        block_size=bs,
+        local_window_blocks=adj_lw,
+        stride_blocks=adj_st,
+        global_blocks=adj_gb,
     )
     sparsity = pattern.sparsity
     print(f"Pattern sparsity: {sparsity:.1%} | Active blocks: {pattern.num_active_blocks}")
