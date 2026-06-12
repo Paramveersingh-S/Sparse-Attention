@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# CUDA build artifacts
+*.o
+*.a
+*.fatbin
+*.cubin
+*.ptx
+*.d
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# PyTorch/Triton cache
+~/.triton/
+*.kernel_cache/
+torch_extensions/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_meta
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Benchmark outputs
+*.csv
+*.json
+benchmark_results/
+
+# Model weights (do not commit)
+*.bin
+*.safetensors
+*.pth
+*.pt
+models/
+
+# vLLM cache
+*.vllm_cache/
+
+# Logs
+*.log
+logs/
