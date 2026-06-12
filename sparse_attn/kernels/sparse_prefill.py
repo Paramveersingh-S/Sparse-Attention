@@ -329,7 +329,7 @@ def _sparse_prefill_triton(
 
     is_t4 = torch.cuda.get_device_capability(q.device)[0] < 8
     num_stages = 2 if is_t4 else 3
-    num_warps = 2 if bs == 32 else 4
+    num_warps = 4  # Must be 4 to prevent register spilling for BLOCK_D=128
 
     _sparse_prefill_kernel[grid](
         q, k, v, out,
