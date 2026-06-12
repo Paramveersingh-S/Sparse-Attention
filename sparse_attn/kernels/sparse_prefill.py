@@ -265,7 +265,7 @@ if _TRITON_AVAILABLE:
             m_new   = tl.maximum(m, row_max)
             p       = tl.exp(s - m_new[:, None])    # [BLOCK_SIZE, BLOCK_SIZE]
             l_new   = tl.exp(m - m_new) * l + tl.sum(p, axis=1)
-            o       = tl.exp(m - m_new)[:, None] * o + tl.dot(p.to(tl.float32), v)
+            o       = tl.exp(m - m_new)[:, None] * o + tl.dot(p.to(tl.float16), v)
 
             m = m_new
             l = l_new
