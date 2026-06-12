@@ -234,11 +234,11 @@ if _TRITON_AVAILABLE:
             k_base = (
                 batch_idx * stride_kb
                 + head_idx * stride_kh
-                + (kv_start + offs_m[None, :]) * stride_ks
-                + offs_d[:, None] * stride_kd
+                + (kv_start + offs_m[:, None]) * stride_ks
+                + offs_d[None, :] * stride_kd
             )
-            k_mask = (kv_start + offs_m[None, :] < S) & (offs_d[:, None] < D)
-            k = tl.load(k_ptr + k_base, mask=k_mask, other=0.0)  # [BLOCK_D, BLOCK_SIZE]
+            k_mask = (kv_start + offs_m[:, None] < S) & (offs_d[None, :] < D)
+            k = tl.load(k_ptr + k_base, mask=k_mask, other=0.0)  # [BLOCK_SIZE, BLOCK_D]
 
             # Load V tile
             v_base = (
@@ -251,8 +251,8 @@ if _TRITON_AVAILABLE:
             v = tl.load(v_ptr + v_base, mask=v_mask, other=0.0)  # [BLOCK_SIZE, BLOCK_D]
 
             # Attention scores: [BLOCK_SIZE, BLOCK_SIZE]
-            # q: [BLOCK_SIZE, BLOCK_D], k: [BLOCK_D, BLOCK_SIZE]
-            s = tl.dot(q, k) * softmax_scale
+            # q: [BLOCK_SIZE, BLOCK_D], k: [BLOCK_SIZE, BLOCK_D] -> trans(k): [BLOCK_D, BLOCK_SIZE]
+            s = tl.dot(q, tl.trans(k)) * softmax_scale
 
             # Causal masking (diagonal blocks: token-level)
             if is_causal:
@@ -330,6 +330,8 @@ def _sparse_prefill_triton(
         softmax_scale,
         BLOCK_SIZE=bs,
         BLOCK_D=BLOCK_D,
+        num_warps=4,
+        num_stages=3,
     )
     return out
 

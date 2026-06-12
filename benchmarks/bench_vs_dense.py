@@ -159,11 +159,13 @@ def bench_config(name, B, H, S, D, local_window, stride, global_blocks, device, 
         util = expected_sm_utilization(B, H, S, 512, sparsity)
         print(f"Expected SM util (chunked-KV decode): {util:.0%}")
 
-        # Correctness (max error on attended positions)
-        if dense_out is not None:
-            # Sample a subset of attended positions for comparison
-            err = (dense_out.float() - sparse_out.float()).abs().max().item()
-            print(f"Max error vs dense: {err:.2e} {'✓' if err < 1e-2 else '✗'}")
+        # Correctness
+        if S <= 16384:
+            ref_out = sparse_prefill(q, k, v, pattern, softmax_scale=scale, force_reference=True)
+            err = (ref_out.float() - sparse_out.float()).abs().max().item()
+            print(f"Max error vs ref: {err:.2e} {'✓' if err < 1e-2 else '✗'}")
+        else:
+            print("Max error vs ref: Skipped for large S")
 
     except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
         print(f"Sparse:        OOM ({type(e).__name__})")
